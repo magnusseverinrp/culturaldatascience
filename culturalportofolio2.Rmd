@@ -1,0 +1,113 @@
+---
+title: "culturalportfolio2"
+author: "Magnus Severin Ringgaard Poulsen"
+date: "2024-11-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pacman::p_load(dslabs, tidyverse)
+
+theme_set(theme_bw())
+```
+
+```{r}
+data("divorce_margarine")
+```
+
+## Part 1 
+Would an increase in the preference for margarine lead to skyrocketing divorce rates?
+
+```{r}
+head(divorce_margarine)
+```
+
+```{r}
+cor.test(divorce_margarine$divorce_rate_maine, divorce_margarine$margarine_consumption_per_capita)
+```
+There seem to be a near perfect positive correlation between margaine consumption and divorce rate *r(8)=0.99* - with strong significance *p<0.0001*. 
+This can be further illustrated with a scatterplot and a regression line:
+```{r}
+divorce_margarine %>% ggplot(aes(divorce_rate_maine, margarine_consumption_per_capita)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+```
+This shows correlation between the variables, but not necessarily a causal link between them. So, although there is correlation, an increase in margarine consumption would not necessarily lead to an increase in divorce rate. Most likely we are investigating a spurious correlation. 
+
+## Part 2 
+Load the ‘GSSvocab’ dataset from the ‘car’ package. This dataset contains people’s scores on an English vocabulary test and includes demographic information.
+```{r}
+pacman::p_load("car")
+```
+
+```{r}
+data(GSSvocab)
+```
+
+Filter for the year 1978 and remove rows with missing values (the function na.exclude() is one
+way to do this – check out the documentation!).
+
+```{r}
+GSSvocab <- GSSvocab %>% na.omit() %>% filter(year==1978)
+```
+
+Is a person’s score on the vocabulary test (‘vocab’) significantly impacted by their level of
+education (‘educ’)? Visualize the relationship in a plot and build a model. Briefly explain the
+results.
+
+```{r}
+GSSvocab %>% ggplot(aes(educ, vocab)) +
+  geom_point(stat = "summary", fun = "mean") +
+  geom_smooth(method="lm", col = "chartreuse") +
+  labs(x = "Level of Education", y = "Mean Vocab Score") 
+
+```
+```{r}
+edu_model <- lm(vocab~educ, data=GSSvocab)
+summary(edu_model)
+```
+The result of the linear modelling shows a positive correlation between education level and vocab score. The model suggest a 0.39 increase in vocab score for every one unit increase in education level. This is highly significant given *p<0.0001* The intercept suggest that at a education level of 0 the predicted vocab score would be 1.236.   
+
+Whether a person is the native of an English-speaking country (‘nativeBorn’) could potentially
+have an impact on the size of their vocabulary. Visualize the relationship and add the predictor
+to the model. Briefly explain the results.
+
+```{r}
+GSSvocab %>% ggplot(aes(nativeBorn, vocab, fill = nativeBorn)) + 
+  geom_bar(stat = "summary", fun = "mean") + 
+  geom_errorbar(stat = 'summary', fun.data = "mean_se") +
+  labs(x = "Native Born", y = "Mean Vocab Score")
+```
+```{r}
+edu_native_model <- lm(vocab~educ+nativeBorn, data=GSSvocab)
+summary(edu_native_model)
+```
+Being native born has a postive correlation with vocab score. The model suggests a 0.65 increase in vocab score if you are native born, this is significant *p<0.01*. The intercept has decrease compared to the previous model, as it should now be interpreted as a not native born with an education level of 0.  
+
+Does a person’s level of education depend on whether they are a native of the country?
+Visualize the relationship. Do you think it makes sense to add the relationship as an interaction
+term? Try creating the model and briefly explain the results.
+
+```{r}
+GSSvocab %>% ggplot(aes(nativeBorn, educ, fill = nativeBorn)) + 
+  geom_bar(stat = "summary", fun = "mean") + 
+  geom_errorbar(stat = 'summary', fun.data = "mean_se") +
+  labs(x = "Native Born", y = "Mean Education Level")
+```
+```{r}
+interaction_model <- lm(vocab~educ*nativeBorn, data=GSSvocab)
+summary(interaction_model)
+```
+Looking at the bar plot adding an interaction term does not seem sensible, as being native born does not seem to have an effect on mean education level from visual inspection. This aligns with the results from modeling. Here the interaction term is non-significant *p>0.05*. The education variable is still significant *p<0.05*, but being nativeborn becomes non-significant *p>0.05*. 
+
+Which model performs best?
+```{r}
+anova(edu_model, edu_native_model , interaction_model)
+```
+Comparing the models can be done using an anova test, which model output can be seen above. 
+
+Here we see a that sum of squares increase by 35.37 when comparing model 1 and 2, meaning that more variance is explained, this is supported by the relatively high F statistic *F=10.01* which suggests the models are different, which is significant *p<0.05*. On the other hand when comparing model 2 and 3, the sum of squares only increase by 0.67, close to 0, and the F statistic is relatively low *F=0.19*, which is found to be non-significant *p>0.05*. This suggests that model 2 is the best of the three models, as it has a significantly higher sum of squares and F-score than model 1, and the small difference when applying the interaction term in model 3 is non-significant, so the more parsimonious model 2 can be said to perform best. 
