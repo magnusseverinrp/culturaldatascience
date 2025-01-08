@@ -1,0 +1,262 @@
+---
+title: "culturalexam"
+author: "Magnus Severin Ringgaard Poulsen"
+date: "2024-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pacman::p_load("tidyverse", "nnet", "brms")
+```
+
+```{r}
+df <- read_csv("supersickdata.csv")
+```
+
+```{r}
+unique(df$Topic_name)
+```
+
+
+```{r}
+subset_df <- df %>%
+  sample_n(2000) %>% 
+  mutate(
+    party = as.factor(party),
+    sex = as.factor(sex),
+    Topic_name = as.factor(Topic_name)
+  )
+
+
+```
+
+```{r}
+filtered_df <- df %>% filter(Topic_name %in% c("Defence", "Healthcare", "Education", "Economy")) %>% mutate(
+    party = as.factor(party),
+    sex = as.factor(sex),
+    Topic_name = as.factor(Topic_name)
+  )
+
+```
+
+
+```{r}
+model <- brm(
+  formula = Topic_name ~ sex + (1 | party), 
+  data = subset_df,
+  family = categorical(),  
+  chains = 4,
+  cores = 4,
+  iter = 2000,
+  file = "model"
+)
+
+# Summarize the model
+summary(model)
+
+```
+
+
+
+```{r}
+sex_male <- factor(c("m"))
+party <- factor(c("ALT", "DD", "DF", "EL", "g_f", "KF", "LA", "M", "NB", "RV", "S", "SF", "V"))
+
+sex_repeated_male <- rep(sex_male, length(party))
+
+data_male <- data.frame(
+  sex = sex_repeated_male,
+  party = rep(party, each = length(sex_male))
+)
+
+# Ensure the vectors are now equal length
+nrow(data_male)  # Should be 2 * 13 = 26
+
+fitted_male <- fitted(model,
+              newdata = data_male,
+              summary = F)
+
+fitted_male_df <- as.data.frame(fitted_male)
+```
+
+```{r}
+sex_female <- factor(c("f"))
+party <- factor(c("ALT", "DD", "DF", "EL", "g_f", "KF", "LA", "M", "NB", "RV", "S", "SF", "V"))
+
+sex_repeated_female <- rep(sex_female, length(party))
+
+data_female <- data.frame(
+  sex = sex_repeated_female,
+  party = rep(party, each = length(sex_female))
+)
+
+
+fitted_female <- fitted(model,
+              newdata = data_female,
+              summary = F)
+
+fitted_female_df <- as.data.frame(fitted_female)
+```
+
+```{r}
+#construct difference matrix
+differences <- fitted_female / fitted_male
+
+differences_df <- as.data.frame(differences)
+
+topic_list = c("Politics", "Labour", "Territories", "Healthcare", "Culture", "Social Affairs", "Foreign Affairs", "Housing", "Education", "Justice", "Business", "Defence", "Regional Affairs", "Environment", "Economy", "Infrastructure", "European Integration", "Immigration", "Energy", "Agriculture")
+
+no_party_df <- data.frame(ID = c(1:(4000*13)))
+#for each topic get all columns in differences_df
+
+
+#extract values from draws and assign to no party df
+for (topic in topic_list) {
+  #get all columns names containing topic in differences_df
+  topic_columns <- grep(topic, colnames(differences_df), value = TRUE)
+  columns = c()
+  
+  
+    #iterate through each topic_column and add to columns
+    for (column in topic_columns) {
+      values = differences_df[column]
+      
+      #append values to columns
+      columns <- c(columns, values)
+      
+    }
+  #assign topic to no_party_df
+  no_party_df[topic] <- columns
+
+}
+
+
+```
+```{r}
+topics_to_plot <- c("Defence", "Healthcare", "Environment", "Economy", "Education")
+
+data_long <- no_party_df %>% pivot_longer(cols = topics_to_plot, names_to = "topic", values_to = "value")
+
+
+#empty ggplot
+plot <- ggplot(data_long, aes(x = value, fill = topic)) +
+    geom_density(alpha = 0.5) +
+    labs(title = paste("Ratios of estimated probability of topic", topic)) +
+    xlab("Rrobability ratio (f/m)") +
+  theme_classic() +
+  #move legend to top right of plot
+  theme(legend.position = "top") +
+  #blank legend title
+  theme(legend.title = element_blank()) 
+
+  
+
+
+plot
+
+#save the plot in the figures folder
+ggsave("plot.png", plot)
+
+#empty ggplot
+log_plot <- ggplot(data_long, aes(x = log(value), fill = topic)) +
+    geom_density(alpha = 0.5) +
+    labs(title = paste("log Ratios of estimated probability of topic", topic)) +
+  xlim(c(-2.5, 2.5))+
+    xlab("log Probability ratio (f/m)") +
+  theme_classic() +
+  #move legend to top right of plot
+  theme(legend.position = "top") +
+  #blank legend title
+  theme(legend.title = element_blank()) 
+
+  
+
+
+log_plot
+
+#save the plot in the figures folder
+ggsave("log_plot.png", log_plot)
+```
+
+
+```{r}
+fitted_female <- fitted(model,
+              newdata = data.frame(sex = "f"),
+              summary = F,
+              allow_new_levels = T)
+
+f_pp <- posterior_predict(model, newdata = data.frame(sex = "f"), allow_new_levels = TRUE)
+m_pp <- posterior_predict(model, newdata = data.frame(sex = "m"), allow_new_levels = TRUE)
+
+```
+
+```{r}
+model2 <- brm(
+  formula = Topic_name ~ sex + (1 | party) + (1 | Name), 
+  data = df,
+  family = categorical(),  
+  chains = 4,
+  cores = 4,
+  iter = 4000,
+  file = "model_2"
+)
+
+
+
+```
+
+
+```{r}
+
+fitted_female <- fitted(model,
+              newdata = data.frame(sex = "f"),
+              summary = F,
+              allow_new_levels = T)
+
+
+fitted_male <- fitted(model,
+              newdata = data.frame(sex = "m"),
+              summary = F,
+              allow_new_levels = T)
+
+differences <- fitted_female / fitted_male
+
+differences_df <- as.data.frame(differences) %>%
+  #rename so that only chars remain in col names
+  rename_all(~ gsub("[^[:alpha:]]", "", .)) 
+
+differences_df 
+
+topics_to_plot <- c("Defence", "Healthcare", "Environment", "Economy", "Education")
+
+#empty ggplot
+log_plot <- ggplot(data_long, aes(x = log(value), fill = topic)) +
+    geom_density(alpha = 0.5) +
+    labs(title = " Predicticed Relative Probabilities of Certain Topics") +
+  xlim(c(-2.5, 2.5))+
+    xlab("Relative Probability of Topic (male -> female)") +
+  #exponentiate ticks on x axis
+  scale_x_continuous(labels = function(x) format(round(exp(x), 2), scientific = FALSE)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_classic() +
+  ylab("") +
+  #move legend to top right of plot
+  theme(legend.position = "top") +
+  #blank legend title
+  theme(legend.title = element_blank())  
+  
+
+log_plot
+
+ggsave("log_plot.png", log_plot)
+
+```
+
+
+
+
+
